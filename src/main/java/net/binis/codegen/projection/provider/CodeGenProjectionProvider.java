@@ -5,6 +5,7 @@ import net.binis.codegen.factory.ProjectionInstantiation;
 import net.binis.codegen.factory.ProjectionProvider;
 import net.binis.codegen.projection.exception.ProjectionCreationException;
 import net.binis.codegen.projection.objects.CodeMethodImplementation;
+import net.binis.codegen.projection.objects.CodeProxyBase;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDefinition;
@@ -20,6 +21,10 @@ import java.lang.reflect.Method;
 
 @Slf4j
 public class CodeGenProjectionProvider implements ProjectionProvider {
+
+    private static final String PROXY_BASE = "net/binis/codegen/projection/objects/CodeProxyBase";
+    public static final String OBJECT_DESC = "Ljava/lang/Object;";
+    public static final String FIELD_NAME = "value";
 
     @Override
     public ProjectionInstantiation create(Class<?> cls, Class<?>... projections) {
@@ -47,29 +52,26 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         for (var p : projections) {
             objectName += "$" + p.getSimpleName();
         }
-        var objectDesc = objectName.replace('.', '/');
 
         DynamicType.Builder<?> type = new ByteBuddy()
-                .subclass(Object.class)
+                .subclass(CodeProxyBase.class)
                 .name(objectName)
                 .implement(projections)
-                .defineField("value", cls, Opcodes.ACC_PRIVATE | Opcodes.ACC_TRANSIENT)
                 .defineConstructor(Opcodes.ACC_PUBLIC).withParameter(cls).intercept(new CodeMethodImplementation() {
                     @Override
                     public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Implementation.Context implementationContext, MethodDescription instrumentedMethod) {
-
                         methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
-                        methodVisitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKESPECIAL, PROXY_BASE, "<init>", "()V", false);
                         methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
                         methodVisitor.visitVarInsn(Opcodes.ALOAD, 1);
-                        methodVisitor.visitFieldInsn(Opcodes.PUTFIELD, objectDesc, "value", "L" + desc + ";");
+                        methodVisitor.visitFieldInsn(Opcodes.PUTFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
                         methodVisitor.visitInsn(Opcodes.RETURN);
                         return new ByteCodeAppender.Size(2, 2);
                     }
                 });
 
         for (var p : projections) {
-            type = handleInterface(type, cls, p, desc, objectDesc);
+            type = handleInterface(type, cls, p, desc);
         }
 //                .method(ElementMatchers.named("toString"))
 //                .intercept(FixedValue.value("Hello World!"))
@@ -79,25 +81,25 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                 .getLoaded();
     }
 
-    private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc, String objectDesc) {
+    private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc) {
         for (var mtd : intf.getDeclaredMethods()) {
-            type = handleMethod(type, cls, mtd, desc, objectDesc);
+            type = handleMethod(type, cls, mtd, desc);
         }
 
         for (var i : intf.getInterfaces()) {
-            type = handleInterface(type, cls, i, desc, objectDesc);
+            type = handleInterface(type, cls, i, desc);
         }
 
         return type;
     }
 
-    private DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, String objectDesc) {
+    private DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc) {
         var types = mtd.getParameterTypes();
         var ret = mtd.getReturnType();
         var isVoid = void.class.equals(ret);
         try {
             var m = cls.getDeclaredMethod(mtd.getName(), types);
-            type = handleDeclaredMethod(type, mtd, m, desc, objectDesc, types, ret, isVoid);
+            type = handleDeclaredMethod(type, mtd, m, desc, types, ret, isVoid);
         } catch (NoSuchMethodException e) {
             type = handleUndeclaredMethod(type, mtd, types, ret, isVoid);
         }
@@ -141,16 +143,17 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         });
     }
 
-    private DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, String objectDesc, Class<?>[] types, Class<?> ret, boolean isVoid) {
+    private DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
         if (ret.isInterface() && !mtd.getReturnType().equals(m.getReturnType())) {
-            return handleProjection(type, mtd, m, desc, objectDesc, types, ret);
+            return handleProjection(type, mtd, m, desc, types, ret);
         }
 
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
                 methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
-                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, objectDesc, "value", "L" + desc + ";");
+                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var offset = loadParams(methodVisitor, types);
                 methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, ret), false);
                 var locals = offset;
@@ -178,13 +181,14 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         });
     }
 
-    private DynamicType.Builder<?> handleProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, String objectDesc, Class<?>[] types, Class<?> ret) {
+    private DynamicType.Builder<?> handleProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
         var pdesc = TypeDefinition.Sort.describe(mtd.getReturnType()).getActualName().replace('.', '/');
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
                 methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
-                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, objectDesc, "value", "L" + desc + ";");
+                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var offset = loadParams(methodVisitor, types);
                 methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, m.getReturnType()), false);
                 methodVisitor.visitLdcInsn(Type.getType(mtd.getReturnType()));

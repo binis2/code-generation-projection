@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
+import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -137,9 +138,11 @@ class ProjectionsTest {
     }
 
 
-    public static class Test2Object {
+    public static class Test2Object extends CodeProxyBase<TestObject> {
 
-        private transient TestObject value;
+        public Test2Object(TestObject value) {
+            this.value = value;
+        }
 
         public String getValue() {
             return value.getValue();
