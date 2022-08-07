@@ -32,8 +32,10 @@ class ProjectionsTest {
         assertEquals("sub", proxy.getSubProjection2(1, 1).getSub());
         assertEquals("sub", proxy.getSubProjection3(true, 1, '1').getSub());
 
+        assertEquals("sub", proxy.getSubProjectionParentSubProjection2(2, 2).getSub());
+
         var json = mapper.writeValueAsString(proxy);
-        assertEquals(211, json.length());
+        assertEquals(381, json.length());
 
         var map = mapper.readValue(json, Map.class);
         assertEquals("value1", map.get("value"));
@@ -50,9 +52,21 @@ class ProjectionsTest {
 
         assertNotNull(map.get("subProjection"));
         assertEquals("sub", ((Map) map.get("subProjection")).get("sub"));
+
+        //Sub properties
+
+        assertEquals("works", map.get("subProjectionValue"));
+        assertEquals(2.0, map.get("subProjectionDoubleValue"));
+        assertEquals(2, map.get("subProjectionLongValue"));
+        assertEquals(true, map.get("subProjectionBooleanValue"));
+        assertEquals(2.0, map.get("subProjectionParentSubProjectionParentFloat"));
     }
 
-    public interface TestProjection {
+    public interface LongInterface {
+        long getLong();
+    }
+
+    public interface TestProjection extends LongInterface {
         String getValue();
         void setValue(String value);
 
@@ -76,22 +90,35 @@ class ProjectionsTest {
         SubProjection getSubProjection();
         SubProjection getSubProjection2(double param1, long param2);
         SubProjection getSubProjection3(boolean param1, float param2, char param3);
+
+        //Sub properties
+        String getSubProjectionValue();
+        double getSubProjectionDoubleValue();
+        long getSubProjectionLongValue();
+        boolean getSubProjectionBooleanValue();
+        float getSubProjectionParentSubProjectionParentFloat();
+
+        SubProjection getSubProjectionParentSubProjection2(double param1, long param2);
     }
 
     public interface SubProjection {
         String getSub();
     }
 
-    public static class TestObject {
+    public static class BaseTestObject {
+        public long getLong() {
+            return 1;
+        }
+    }
+
+    @Slf4j
+    public static class TestObject extends BaseTestObject {
 
         private String value = "value";
         public String getValue() {
             return value;
         }
 
-        public long getLong() {
-            return 1;
-        }
         public boolean getBoolean() {
             return true;
         }
@@ -116,23 +143,48 @@ class ProjectionsTest {
         }
 
         public SubObject getSubProjection() {
-            return new SubObject();
+            return new SubObject(this);
         }
 
         public SubObject getSubProjection2(double param1, long param2) {
-            return new SubObject();
+            log.info("getSubProjection2({}, {})", param1, param2);
+            return new SubObject(this);
         }
 
         public SubObject getSubProjection3(boolean param1, float param2, char param3) {
-            return new SubObject();
+            log.info("getSubProjection3({}, {}, {})", param1, param2, param3);
+            return new SubObject(this);
         }
 
     }
 
     public static class SubObject {
 
+        private final TestObject parent;
+
+        public SubObject(TestObject parent) {
+            this.parent = parent;
+        }
+
         public String getSub() {
             return "sub";
+        }
+
+        public double getDoubleValue() {
+            return 2.0;
+        }
+        public long getLongValue() {
+            return 2L;
+        }
+        public boolean getBooleanValue() {
+            return true;
+        }
+        public String getValue() {
+            return "works";
+        }
+
+        public TestObject getParent() {
+            return parent;
         }
 
     }
@@ -210,6 +262,46 @@ class ProjectionsTest {
 
         SubProjection getSubProjection3(boolean param1, float param2, char param3) {
             return CodeFactory.projection(value.getSubProjection3(param1, param2, param3), SubProjection.class);
+        }
+
+        String getSubProjectionValue() {
+            var p = value.getSubProjection();
+            if (p != null) {
+                return p.getValue();
+            }
+            return null;
+        }
+
+        long getSubProjectionParentSubProjectionParentLong() {
+            var p = value.getSubProjection();
+            if (p != null) {
+                System.out.println(p);
+                var q = p.getParent();
+                if (q != null) {
+                    System.out.println(p);
+                    var r = q.getSubProjection();
+                    if (r != null) {
+                        System.out.println(p);
+                        var s = r.getParent();
+                        if (s != null) {
+                            System.out.println(p);
+                            return s.getLong();
+                        }
+                    }
+                }
+            }
+            return 0L;
+        }
+
+        SubProjection getSubProjectionParentSubProjection2(double param1, long param2) {
+            var p = value.getSubProjection();
+            if (p != null) {
+                var q = p.getParent();
+                if (q != null) {
+                    return CodeFactory.projection(q.getSubProjection2(param1, param2), SubProjection.class);
+                }
+            }
+            return null;
         }
 
     }

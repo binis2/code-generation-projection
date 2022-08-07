@@ -3,21 +3,30 @@ package net.binis.codegen.projection.provider;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.ProjectionInstantiation;
 import net.binis.codegen.factory.ProjectionProvider;
+import net.binis.codegen.objects.Pair;
 import net.binis.codegen.projection.exception.ProjectionCreationException;
 import net.binis.codegen.projection.objects.CodeMethodImplementation;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.asm.AsmVisitorWrapper;
+import net.bytebuddy.description.field.FieldDescription;
+import net.bytebuddy.description.field.FieldList;
 import net.bytebuddy.description.method.MethodDescription;
+import net.bytebuddy.description.method.MethodList;
 import net.bytebuddy.description.type.TypeDefinition;
+import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.Implementation;
 import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
-import net.bytebuddy.jar.asm.MethodVisitor;
-import net.bytebuddy.jar.asm.Opcodes;
-import net.bytebuddy.jar.asm.Type;
+import net.bytebuddy.jar.asm.*;
+import net.bytebuddy.pool.TypePool;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.*;
+
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
 
 @Slf4j
 public class CodeGenProjectionProvider implements ProjectionProvider {
@@ -55,6 +64,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
         DynamicType.Builder<?> type = new ByteBuddy()
                 .subclass(CodeProxyBase.class)
+                .visit(new EnableFramesComputing())
                 .name(objectName)
                 .implement(projections)
                 .defineConstructor(Opcodes.ACC_PUBLIC).withParameter(cls).intercept(new CodeMethodImplementation() {
@@ -70,44 +80,51 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                     }
                 });
 
+        var methods = new HashMap<String, List<Class<?>[]>>();
         for (var p : projections) {
-            type = handleInterface(type, cls, p, desc);
+            type = handleInterface(type, cls, p, desc, methods);
         }
-//                .method(ElementMatchers.named("toString"))
-//                .intercept(FixedValue.value("Hello World!"))
 
         return type.make()
                 .load(cls.getClassLoader())
                 .getLoaded();
     }
 
-    private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc) {
+    private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc, Map<String, List<Class<?>[]>> methods) {
         for (var mtd : intf.getDeclaredMethods()) {
-            type = handleMethod(type, cls, mtd, desc);
+            type = handleMethod(type, cls, mtd, desc, methods);
         }
 
         for (var i : intf.getInterfaces()) {
-            type = handleInterface(type, cls, i, desc);
+            type = handleInterface(type, cls, i, desc, methods);
         }
 
         return type;
     }
 
-    private DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc) {
+    private DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Map<String, List<Class<?>[]>> methods) {
         var types = mtd.getParameterTypes();
         var ret = mtd.getReturnType();
-        var isVoid = void.class.equals(ret);
-        try {
-            var m = cls.getDeclaredMethod(mtd.getName(), types);
-            type = handleDeclaredMethod(type, mtd, m, desc, types, ret, isVoid);
-        } catch (NoSuchMethodException e) {
-            type = handleUndeclaredMethod(type, mtd, types, ret, isVoid);
+        if (!methodExists(methods, mtd, types)) {
+            var isVoid = void.class.equals(ret);
+            try {
+                var m = findMethod(cls, mtd.getName(), types);
+                type = handleDeclaredMethod(type, mtd, m, desc, types, ret, isVoid);
+            } catch (NoSuchMethodException e) {
+                var t = checkPath(type, cls, mtd, desc, types, ret, isVoid);
+                if (isNull(t)) {
+                    type = handleUndeclaredMethod(type, mtd, types, ret, isVoid);
+                } else {
+                    type = t;
+                }
+            }
         }
 
         return type;
     }
 
     private DynamicType.Builder<?> handleUndeclaredMethod(DynamicType.Builder<?> type, Method mtd, Class<?>[] types, Class<?> ret, boolean isVoid) {
+        log.info("Handle undeclared method: {}", mtd.getName());
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
@@ -115,29 +132,8 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                     methodVisitor.visitInsn(Opcodes.RETURN);
                     return new ByteCodeAppender.Size(0, types.length + 1);
                 } else {
-                    if (ret.isPrimitive()) {
-                        if (ret.equals(long.class)) {
-                            methodVisitor.visitInsn(Opcodes.LCONST_0);
-                            methodVisitor.visitInsn(Opcodes.LRETURN);
-                            return new ByteCodeAppender.Size(2, types.length + 1);
-                        } else if (ret.equals(double.class)) {
-                            methodVisitor.visitInsn(Opcodes.DCONST_0);
-                            methodVisitor.visitInsn(Opcodes.DRETURN);
-                            return new ByteCodeAppender.Size(2, types.length + 1);
-                        } else if (ret.equals(float.class)) {
-                            methodVisitor.visitInsn(Opcodes.FCONST_0);
-                            methodVisitor.visitInsn(Opcodes.FRETURN);
-                            return new ByteCodeAppender.Size(2, types.length + 1);
-                        } else {
-                            methodVisitor.visitInsn(Opcodes.ICONST_0);
-                            methodVisitor.visitInsn(Opcodes.IRETURN);
-                            return new ByteCodeAppender.Size(2, types.length + 1);
-                        }
-                    } else {
-                        methodVisitor.visitInsn(Opcodes.ACONST_NULL);
-                        methodVisitor.visitInsn(Opcodes.ARETURN);
-                        return new ByteCodeAppender.Size(1, types.length + 1);
-                    }
+                    defaultReturn(methodVisitor, ret);
+                    return new ByteCodeAppender.Size(1 + (ret.isPrimitive() ? 1 : 0), types.length + 1);
                 }
             }
         });
@@ -157,26 +153,66 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                 var offset = loadParams(methodVisitor, types);
                 methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, ret), false);
                 var locals = offset;
-
-                if (isVoid) {
-                    methodVisitor.visitInsn(Opcodes.RETURN);
-                } else {
-                    if (long.class.equals(ret)) {
-                        offset++;
-                        methodVisitor.visitInsn(Opcodes.LRETURN);
-                    } else if (double.class.equals(ret)) {
-                        offset++;
-                        methodVisitor.visitInsn(Opcodes.DRETURN);
-                    } else if (float.class.equals(ret)) {
-                        methodVisitor.visitInsn(Opcodes.FRETURN);
-                    } else if (ret.isPrimitive()) {
-                        methodVisitor.visitInsn(Opcodes.IRETURN);
-                    } else {
-                        methodVisitor.visitInsn(Opcodes.ARETURN);
-                    }
-                }
+                var retOp = getReturnOpcode(ret);
+                methodVisitor.visitInsn(retOp.getKey());
+                offset += retOp.getValue();
 
                 return new ByteCodeAppender.Size(offset, locals);
+            }
+        });
+    }
+
+    private DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {
+        assert path.size() > 1;
+        return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
+            @Override
+            public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
+                var loadOffset = loadOffset(types);
+                var label = new Label();
+                methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
+                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
+                var size = path.size();
+                var m = path.pop();
+                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                Method pm;
+                for (var i = 1; i < size - 1; i++) {
+                    pm = m;
+                    m = path.pop();
+                    var o = loadOffset + i;
+                    methodVisitor.visitVarInsn(Opcodes.ASTORE, o);
+                    methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
+                    methodVisitor.visitJumpInsn(Opcodes.IFNULL, label);
+
+//                    //Test
+//                    methodVisitor.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+//                    methodVisitor.visitVarInsn(Opcodes.ALOAD, loadOffset + 1);
+//                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/Object;)V", false);
+//                    //Test
+
+                    methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                }
+                pm = m;
+                m = path.pop();
+                var o = loadOffset + size - 1;
+                methodVisitor.visitVarInsn(Opcodes.ASTORE, o);
+                methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
+                methodVisitor.visitJumpInsn(Opcodes.IFNULL, label);
+                methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
+                loadParams(methodVisitor, types);
+                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                if (ret.isInterface() && !ret.equals(m.getReturnType())) {
+                    methodVisitor.visitLdcInsn(Type.getType(ret));
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, TypeDefinition.Sort.describe(ret).getActualName().replace('.', '/'));
+                }
+                var retOp = getReturnOpcode(ret);
+                methodVisitor.visitInsn(retOp.getKey());
+                methodVisitor.visitLabel(label);
+                defaultReturn(methodVisitor, ret);
+
+                return new ByteCodeAppender.Size(1, 1);
             }
         });
     }
@@ -264,6 +300,25 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return Opcodes.ALOAD;
     }
 
+    private Pair<Integer, Integer> getReturnOpcode(Class<?> type) {
+        if (void.class.equals(type)) {
+            return Pair.of(Opcodes.RETURN, 0);
+        }
+        if (long.class.equals(type)) {
+            return Pair.of(Opcodes.LRETURN, 1);
+        }
+        if (double.class.equals(type)) {
+            return Pair.of(Opcodes.DRETURN, 1);
+        }
+        if (float.class.equals(type)) {
+            return Pair.of(Opcodes.FRETURN, 0);
+        }
+        if (type.isPrimitive()) {
+            return Pair.of(Opcodes.IRETURN, 0);
+        }
+        return Pair.of(Opcodes.ARETURN, 0);
+    }
+
     private int getLoadOffset(Class<?> type) {
         if (type.isPrimitive() && (long.class.equals(type) || double.class.equals(type))) {
             return 2;
@@ -273,12 +328,139 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
     private int loadParams(MethodVisitor methodVisitor, Class<?>[] types) {
         var offset = 1;
-        for (Class<?> type : types) {
+        for (var type : types) {
             methodVisitor.visitVarInsn(getLoadOpcode(type), offset);
             offset += getLoadOffset(type);
         }
 
         return offset;
+    }
+
+    private int loadOffset(Class<?>[] types) {
+        var offset = 0;
+        for (Class<?> type : types) {
+            offset += getLoadOffset(type);
+        }
+
+        return offset;
+    }
+
+
+    private boolean methodExists(Map<String, List<Class<?>[]>> methods, Method mtd, Class<?>[] types) {
+        var list = methods.computeIfAbsent(mtd.getName(), k -> new ArrayList<>());
+
+        for (var t : list) {
+            if (paramsMatch(types, t)) {
+                return true;
+            }
+        }
+
+        list.add(types);
+        return false;
+    }
+
+    private boolean paramsMatch(Class<?>[] types, Class<?>[] t) {
+        if (t.length == types.length) {
+            var match = true;
+            for (var i = 0; i < t.length; i++) {
+                if (!t[i].equals(types[i])) {
+                    match = false;
+                    break;
+                }
+            }
+            return match;
+        }
+        return false;
+    }
+
+    private DynamicType.Builder<?> checkPath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
+        log.info("Check path: {}", mtd.getName());
+        var path = new ArrayDeque<Method>();
+        findStartMethod(cls, mtd.getName(), types, path);
+        if (!path.isEmpty()) {
+            return handlePath(type, cls, mtd, desc, types, ret, isVoid, path);
+        }
+
+        return null;
+    }
+
+    private Method findMethod(Class<?> cls, String name, Class<?>[] types) throws NoSuchMethodException {
+        try {
+            return cls.getDeclaredMethod(name, types);
+        } catch (NoSuchMethodException ex) {
+            if (nonNull(cls.getSuperclass())) {
+                return findMethod(cls.getSuperclass(), name, types);
+            } else {
+                throw ex;
+            }
+        }
+    }
+
+    private void findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
+        for (var m : cls.getDeclaredMethods()) {
+            if (name.startsWith(m.getName())) {
+                var left = name.substring(m.getName().length());
+                if (left.length() == 0) {
+                    if (paramsMatch(m.getParameterTypes(), types)) {
+                        path.push(m);
+                        return;
+                    }
+                } else {
+                    if (m.getParameterCount() == 0 && !m.getReturnType().isPrimitive()) {
+                        findStartMethod(m.getReturnType(), calcGetterName(left), types, path);
+                        if (!path.isEmpty()) {
+                            path.push(m);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (nonNull(cls.getSuperclass())) {
+            findStartMethod(cls.getSuperclass(), name, types, path);
+        }
+    }
+
+    private String calcGetterName(String value) {
+        return "get" + Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private static void defaultReturn(MethodVisitor methodVisitor, Class<?> ret) {
+        if (ret.isPrimitive()) {
+            if (ret.equals(long.class)) {
+                methodVisitor.visitInsn(Opcodes.LCONST_0);
+                methodVisitor.visitInsn(Opcodes.LRETURN);
+            } else if (ret.equals(double.class)) {
+                methodVisitor.visitInsn(Opcodes.DCONST_0);
+                methodVisitor.visitInsn(Opcodes.DRETURN);
+            } else if (ret.equals(float.class)) {
+                methodVisitor.visitInsn(Opcodes.FCONST_0);
+                methodVisitor.visitInsn(Opcodes.FRETURN);
+            } else {
+                methodVisitor.visitInsn(Opcodes.ICONST_0);
+                methodVisitor.visitInsn(Opcodes.IRETURN);
+            }
+        } else {
+            methodVisitor.visitInsn(Opcodes.ACONST_NULL);
+            methodVisitor.visitInsn(Opcodes.ARETURN);
+        }
+    }
+
+    private static class EnableFramesComputing implements AsmVisitorWrapper {
+        @Override
+        public final int mergeWriter(int flags) {
+            return flags | ClassWriter.COMPUTE_FRAMES;
+        }
+
+        @Override
+        public final int mergeReader(int flags) {
+            return flags | ClassWriter.COMPUTE_FRAMES;
+        }
+
+        @Override
+        public final ClassVisitor wrap(TypeDescription td, ClassVisitor cv, Implementation.Context ctx, TypePool tp, FieldList<FieldDescription.InDefinedShape> fields, MethodList<?> methods, int wflags, int rflags) {
+            return cv;
+        }
     }
 
 }

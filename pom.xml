@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.binis</groupId>
     <artifactId>code-generator-projection</artifactId>
-    <version>0.3.6</version>
+    <version>0.3.7</version>
     <name>code-generator-projection</name>
     <description>Binis Code Generation Projections Extension</description>
     <url>https://github.com/binis2/code-generation</url>
@@ -67,7 +67,7 @@
         <dependency>
             <groupId>dev.binis</groupId>
             <artifactId>code-generator-core</artifactId>
-            <version>0.3.6</version>
+            <version>0.3.7</version>
         </dependency>
         <dependency>
             <groupId>net.bytebuddy</groupId>
@@ -102,6 +102,12 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.13.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.36</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

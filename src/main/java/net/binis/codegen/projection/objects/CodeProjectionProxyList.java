@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
+@SuppressWarnings("unchecked")
 public class CodeProjectionProxyList implements List {
 
     private final List list;
