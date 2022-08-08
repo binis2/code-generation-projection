@@ -1,5 +1,25 @@
 package net.binis.codegen.projection.provider;
 
+/*-
+ * #%L
+ * code-generator-projection
+ * %%
+ * Copyright (C) 2021 - 2022 Binis Belev
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.ProjectionInstantiation;
 import net.binis.codegen.factory.ProjectionProvider;
@@ -23,6 +43,7 @@ import net.bytebuddy.pool.TypePool;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.*;
 
 import static java.util.Objects.isNull;
@@ -92,7 +113,9 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
     private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc, Map<String, List<Class<?>[]>> methods) {
         for (var mtd : intf.getDeclaredMethods()) {
-            type = handleMethod(type, cls, mtd, desc, methods);
+            if ((mtd.getModifiers() & Modifier.STATIC) == 0) {
+                type = handleMethod(type, cls, mtd, desc, methods);
+            }
         }
 
         for (var i : intf.getInterfaces()) {
@@ -113,7 +136,9 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
             } catch (NoSuchMethodException e) {
                 var t = checkPath(type, cls, mtd, desc, types, ret, isVoid);
                 if (isNull(t)) {
-                    type = handleUndeclaredMethod(type, mtd, types, ret, isVoid);
+                    if (!mtd.isDefault()) {
+                        type = handleUndeclaredMethod(type, mtd, types, ret, isVoid);
+                    }
                 } else {
                     type = t;
                 }
