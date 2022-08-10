@@ -28,6 +28,7 @@ import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,9 +54,11 @@ class ProjectionsTest {
         assertEquals("sub", proxy.getSubProjection3(true, 1, '1').getSub());
 
         assertEquals("sub", proxy.getSubProjectionParentSubProjection2(2, 2).getSub());
+        assertEquals(3, proxy.getList(1, 2).size());
+
 
         var json = mapper.writeValueAsString(proxy);
-        assertEquals(381, json.length());
+        assertEquals(432, json.length());
 
         var map = mapper.readValue(json, Map.class);
         assertEquals("value1", map.get("value"));
@@ -119,6 +122,9 @@ class ProjectionsTest {
         float getSubProjectionParentSubProjectionParentFloat();
 
         SubProjection getSubProjectionParentSubProjection2(double param1, long param2);
+        List<SubProjection> getList(double param1, long param2);
+
+        List<SubProjection> getList();
     }
 
     public interface SubProjection {
@@ -176,6 +182,14 @@ class ProjectionsTest {
             return new SubObject(this);
         }
 
+        public List<SubObject> getList(double param1, long param2) {
+            log.info("getList({}, {})", param1, param2);
+            return List.of(new SubObject(this), new SubObject(this), new SubObject(this));
+        }
+
+        public List<SubObject> getList() {
+            return List.of(new SubObject(this), new SubObject(this), new SubObject(this));
+        }
     }
 
     public static class SubObject {
@@ -311,6 +325,10 @@ class ProjectionsTest {
                 }
             }
             return 0L;
+        }
+
+        List<SubProjection> getList(double param1, long param2) {
+            return (List) CodeFactory.projections(value.getList(param1, param2), SubProjection.class, SubProjection.class, SubProjection.class);
         }
 
         SubProjection getSubProjectionParentSubProjection2(double param1, long param2) {
