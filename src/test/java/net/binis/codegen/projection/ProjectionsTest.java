@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -55,10 +56,11 @@ class ProjectionsTest {
 
         assertEquals("sub", proxy.getSubProjectionParentSubProjection2(2, 2).getSub());
         assertEquals(3, proxy.getList(1, 2).size());
+        assertEquals(3, proxy.getSet().size());
 
 
         var json = mapper.writeValueAsString(proxy);
-        assertEquals(432, json.length());
+        assertEquals(482, json.length());
 
         var map = mapper.readValue(json, Map.class);
         assertEquals("value1", map.get("value"));
@@ -125,6 +127,8 @@ class ProjectionsTest {
         List<SubProjection> getList(double param1, long param2);
 
         List<SubProjection> getList();
+
+        Set<SubProjection> getSet();
     }
 
     public interface SubProjection {
@@ -190,6 +194,11 @@ class ProjectionsTest {
         public List<SubObject> getList() {
             return List.of(new SubObject(this), new SubObject(this), new SubObject(this));
         }
+
+        public Set<SubObject> getSet() {
+            return Set.of(new SubObject(this), new SubObject(this), new SubObject(this));
+        }
+
     }
 
     public static class SubObject {

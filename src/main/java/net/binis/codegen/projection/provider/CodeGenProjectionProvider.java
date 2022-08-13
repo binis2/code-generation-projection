@@ -28,6 +28,7 @@ import net.binis.codegen.objects.Pair;
 import net.binis.codegen.projection.exception.ProjectionCreationException;
 import net.binis.codegen.projection.objects.CodeMethodImplementation;
 import net.binis.codegen.projection.objects.CodeProjectionProxyList;
+import net.binis.codegen.projection.objects.CodeProjectionProxySet;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.asm.AsmVisitorWrapper;
@@ -59,6 +60,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
     static {
         CodeFactory.registerCustomProxyClass(List.class, (cls, projections) -> obj -> new CodeProjectionProxyList((List) obj, projections));
+        CodeFactory.registerCustomProxyClass(Set.class, (cls, projections) -> obj -> new CodeProjectionProxySet((Set) obj, projections));
     }
 
     @Override
@@ -303,9 +305,9 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
         if (generics.length == original.length) {
             for (var i = 0; i < generics.length; i++) {
-//                if (generics[i].isInterface() && generics[i].getGenericDeclaration().equals(original[i].getGenericDeclaration())) {
+                if (generics[i] instanceof Class && original[i] instanceof Class && ((Class) generics[i]).isInterface() && !generics[i].equals(original[i])) {
                     return true;
-//                }
+                }
             }
         }
 
