@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.binis</groupId>
     <artifactId>code-generator-projection</artifactId>
-    <version>0.3.8</version>
+    <version>0.3.9</version>
     <name>code-generator-projection</name>
     <description>Binis Code Generation Projections Extension</description>
     <url>https://github.com/binis2/code-generation</url>
@@ -59,7 +59,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.target>${java.version}</maven.compiler.target>
 
-        <junit.jupiter.version>5.8.2</junit.jupiter.version>
+        <junit.jupiter.version>5.9.0</junit.jupiter.version>
         <mockito-inline.version>4.5.1</mockito-inline.version>
     </properties>
 
@@ -67,7 +67,7 @@
         <dependency>
             <groupId>dev.binis</groupId>
             <artifactId>code-generator-core</artifactId>
-            <version>0.3.8</version>
+            <version>0.3.9</version>
         </dependency>
         <dependency>
             <groupId>net.bytebuddy</groupId>
