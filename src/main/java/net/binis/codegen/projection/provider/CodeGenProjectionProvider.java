@@ -156,7 +156,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
     }
 
     private DynamicType.Builder<?> handleUndeclaredMethod(DynamicType.Builder<?> type, Method mtd, Class<?>[] types, Class<?> ret, boolean isVoid) {
-        log.info("Handle undeclared method: {}", mtd.getName());
+        log.info("Handle undeclared method: {}", mtd.toString());
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
