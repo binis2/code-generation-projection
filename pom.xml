@@ -45,9 +45,9 @@
     </distributionManagement>
 
     <scm>
-        <connection>scm:git:git://github.com/binis2/code-generation-jackson.git</connection>
-        <developerConnection>scm:git:git@github.com:binis2/code-generation-jackson.git</developerConnection>
-        <url>https://github.com/binis2/code-generation-jackson</url>
+        <connection>scm:git:git://github.com/binis2/code-generation-projection.git</connection>
+        <developerConnection>scm:git:git@github.com:binis2/code-generation-projection.git</developerConnection>
+        <url>https://github.com/binis2/code-generation-projection</url>
         <tag>HEAD</tag>
     </scm>
 
