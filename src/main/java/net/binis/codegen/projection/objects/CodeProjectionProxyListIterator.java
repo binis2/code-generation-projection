@@ -22,7 +22,6 @@ package net.binis.codegen.projection.objects;
 
 import net.binis.codegen.factory.CodeFactory;
 
-import java.util.Iterator;
 import java.util.ListIterator;
 
 public class CodeProjectionProxyListIterator implements ListIterator {
@@ -70,11 +69,13 @@ public class CodeProjectionProxyListIterator implements ListIterator {
         iterator.remove();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void set(Object o) {
         iterator.set(CodeProxyBase.unwrap(o));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void add(Object o) {
         iterator.add(CodeProxyBase.unwrap(o));

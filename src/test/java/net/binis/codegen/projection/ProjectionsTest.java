@@ -336,6 +336,7 @@ class ProjectionsTest {
             return 0L;
         }
 
+        @SuppressWarnings("unchecked")
         List<SubProjection> getList(double param1, long param2) {
             return (List) CodeFactory.projections(value.getList(param1, param2), SubProjection.class, SubProjection.class, SubProjection.class);
         }
