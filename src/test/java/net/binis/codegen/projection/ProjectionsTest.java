@@ -260,11 +260,9 @@ class ProjectionsTest {
         }
 
         public void asd() {
-            return;
         }
 
         public void asd(String param) {
-            return;
         }
 
         public String asd2(boolean param, long param2) {
