@@ -110,6 +110,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
         var methods = new HashMap<String, List<Class<?>[]>>();
         for (var p : projections) {
+            type = type.annotateType(p.getDeclaredAnnotations());
             type = handleInterface(type, cls, p, desc, methods);
         }
 
@@ -168,7 +169,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                     return new ByteCodeAppender.Size(1 + (ret.isPrimitive() ? 1 : 0), types.length + 1);
                 }
             }
-        });
+        }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
     private DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
@@ -198,7 +199,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
                 return new ByteCodeAppender.Size(offset, locals);
             }
-        });
+        }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
     private DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {

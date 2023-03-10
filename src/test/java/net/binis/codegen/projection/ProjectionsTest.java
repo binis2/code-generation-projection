@@ -21,6 +21,8 @@ package net.binis.codegen.projection;
  */
 
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -87,11 +89,34 @@ class ProjectionsTest {
         assertEquals(2.0, map.get("subProjectionParentSubProjectionParentFloat"));
     }
 
+    @Test
+    void testAnnotations() throws NoSuchMethodException {
+        var obj = new TestObject();
+        var proxy = CodeFactory.projection(obj, TestProjection.class);
+
+        var ann = proxy.getClass().getDeclaredAnnotations();
+
+        assertEquals(1, ann.length);
+        assertTrue(ann[0] instanceof JsonRootName);
+        assertEquals("test", ((JsonRootName) ann[0]).value());
+
+        var method = proxy.getClass().getDeclaredMethod("getValue");
+
+        ann = method.getDeclaredAnnotations();
+
+        assertEquals(1, ann.length);
+        assertTrue(ann[0] instanceof JsonProperty);
+        assertEquals("prop", ((JsonProperty) ann[0]).value());
+
+    }
+
     public interface LongInterface {
         long getLong();
     }
 
+    @JsonRootName(value = "test")
     public interface TestProjection extends LongInterface {
+        @JsonProperty("prop")
         String getValue();
         void setValue(String value);
 
