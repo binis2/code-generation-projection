@@ -254,7 +254,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
 
                 return new ByteCodeAppender.Size(1, 1);
             }
-        });
+        }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
     private DynamicType.Builder<?> handleProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
@@ -273,7 +273,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                 var size = (offset == 1) ? 2 : offset;
                 return new ByteCodeAppender.Size(size, offset);
             }
-        });
+        }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
     private DynamicType.Builder<?> handleCustomClassProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret, java.lang.reflect.Type[] generics) {
@@ -298,7 +298,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                 methodVisitor.visitInsn(Opcodes.ARETURN);
                 return new ByteCodeAppender.Size(1, 1);
             }
-        });
+        }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
 

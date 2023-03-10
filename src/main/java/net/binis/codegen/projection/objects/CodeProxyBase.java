@@ -25,8 +25,8 @@ public class CodeProxyBase<T>  {
     protected transient T value;
 
     public static Object unwrap(Object instance) {
-        if (instance instanceof CodeProxyBase) {
-            return ((CodeProxyBase) instance).value;
+        if (instance instanceof CodeProxyBase base) {
+            return base.value;
         }
 
         return instance;

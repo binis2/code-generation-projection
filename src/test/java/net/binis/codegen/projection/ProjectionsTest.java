@@ -9,9 +9,9 @@ package net.binis.codegen.projection;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,11 +25,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonRootName;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.annotation.XmlElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
 
+import java.io.StringWriter;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -106,8 +111,29 @@ class ProjectionsTest {
 
         assertEquals(1, ann.length);
         assertTrue(ann[0] instanceof JsonProperty);
-        assertEquals("prop", ((JsonProperty) ann[0]).value());
+        assertEquals("value", ((JsonProperty) ann[0]).value());
+    }
 
+    @Test
+    void testXML() throws JAXBException {
+        var obj = new TestObject();
+        obj.setValue("xmltest");
+
+        var proxy = CodeFactory.projection(obj, TestXmlView.class);
+
+        var xml = obj2XmlString(proxy);
+
+        assertNotNull(xml);
+        assertEquals(78, xml.length());
+    }
+
+    protected <T> String obj2XmlString(T data) throws JAXBException {
+        var context = JAXBContext.newInstance(data.getClass());
+        var marshaller = context.createMarshaller();
+        marshaller.setProperty("jaxb.fragment", Boolean.TRUE);  // Without XML header..
+        StringWriter stringWriter = new StringWriter();
+        marshaller.marshal(data, stringWriter);
+        return stringWriter.toString();
     }
 
     public interface LongInterface {
@@ -116,39 +142,56 @@ class ProjectionsTest {
 
     @JsonRootName(value = "test")
     public interface TestProjection extends LongInterface {
-        @JsonProperty("prop")
+        @JsonProperty("value")
         String getValue();
+
         void setValue(String value);
 
         long getLong();
+
         boolean getBoolean();
+
         double getDouble();
+
         float getFloat();
 
         String dummy(String value, String value1, String value2, String value3);
+
         void dummy(String value, String value1, String value2, String value3, String value4);
 
         //Not present
         String getNonPresentString();
+
         long getNonPresentLong();
+
         boolean getNonPresentBoolean();
+
         double getNonPresentDouble();
+
         float getNonPresentFloat();
+
         void nonPresent(String param, String param2);
 
         //SubProjections
         SubProjection getSubProjection();
+
         SubProjection getSubProjection2(double param1, long param2);
+
         SubProjection getSubProjection3(boolean param1, float param2, char param3);
 
         //Sub properties
         String getSubProjectionValue();
+
         double getSubProjectionDoubleValue();
+
         long getSubProjectionLongValue();
+
         boolean getSubProjectionBooleanValue();
+
         float getSubProjectionParentSubProjectionParentFloat();
 
         SubProjection getSubProjectionParentSubProjection2(double param1, long param2);
+
         List<SubProjection> getList(double param1, long param2);
 
         List<SubProjection> getList();
@@ -170,6 +213,7 @@ class ProjectionsTest {
     public static class TestObject extends BaseTestObject {
 
         private String value = "value";
+
         public String getValue() {
             return value;
         }
@@ -177,9 +221,11 @@ class ProjectionsTest {
         public boolean getBoolean() {
             return true;
         }
+
         public double getDouble() {
             return 1.0;
         }
+
         public float getFloat() {
             return 2.0f;
         }
@@ -241,12 +287,15 @@ class ProjectionsTest {
         public double getDoubleValue() {
             return 2.0;
         }
+
         public long getLongValue() {
             return 2L;
         }
+
         public boolean getBooleanValue() {
             return true;
         }
+
         public String getValue() {
             return "works";
         }
@@ -374,6 +423,20 @@ class ProjectionsTest {
             }
             return null;
         }
+
+    }
+
+    @XmlRootElement(name = "test")
+    public interface TestXmlView {
+
+        @XmlElement
+        String getValue();
+
+        @XmlElement
+        boolean getBoolean();
+
+        @XmlElement
+        double getDouble();
 
     }
 
