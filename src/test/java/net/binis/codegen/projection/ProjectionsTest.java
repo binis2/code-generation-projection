@@ -130,7 +130,7 @@ class ProjectionsTest {
     protected <T> String obj2XmlString(T data) throws JAXBException {
         var context = JAXBContext.newInstance(data.getClass());
         var marshaller = context.createMarshaller();
-        marshaller.setProperty("jaxb.fragment", Boolean.TRUE);  // Without XML header..
+        marshaller.setProperty("jaxb.fragment", Boolean.TRUE);
         StringWriter stringWriter = new StringWriter();
         marshaller.marshal(data, stringWriter);
         return stringWriter.toString();
