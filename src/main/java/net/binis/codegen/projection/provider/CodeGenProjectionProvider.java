@@ -24,39 +24,47 @@ import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.factory.ProjectionInstantiation;
 import net.binis.codegen.factory.ProjectionProvider;
+import net.binis.codegen.factory.ProxyProvider;
 import net.binis.codegen.objects.Pair;
 import net.binis.codegen.projection.exception.ProjectionCreationException;
 import net.binis.codegen.projection.objects.CodeMethodImplementation;
 import net.binis.codegen.projection.objects.CodeProjectionProxyList;
 import net.binis.codegen.projection.objects.CodeProjectionProxySet;
 import net.binis.codegen.projection.objects.CodeProxyBase;
+import net.binis.codegen.tools.Reflection;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.asm.AsmVisitorWrapper;
 import net.bytebuddy.description.field.FieldDescription;
 import net.bytebuddy.description.field.FieldList;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.method.MethodList;
+import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDefinition;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.Implementation;
+import net.bytebuddy.implementation.InvocationHandlerAdapter;
 import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 import net.bytebuddy.jar.asm.*;
 import net.bytebuddy.jar.asm.Type;
+import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.pool.TypePool;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
 @Slf4j
-public class CodeGenProjectionProvider implements ProjectionProvider {
+public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvider {
 
-    private static final String PROXY_BASE = "net/binis/codegen/projection/objects/CodeProxyBase";
+    protected static final String PROXY_BASE = "net/binis/codegen/projection/objects/CodeProxyBase";
     public static final String OBJECT_DESC = "Ljava/lang/Object;";
     public static final String FIELD_NAME = "value";
+    protected static final Map<Class, Class> proxies = new ConcurrentHashMap<>();
+
 
     static {
         CodeFactory.registerCustomProxyClass(List.class, (cls, projections) -> obj -> new CodeProjectionProxyList((List) obj, projections));
@@ -75,7 +83,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         };
     }
 
-    private Constructor<?> createObject(Class<?> cls, Class<?>[] projections) {
+    protected Constructor<?> createObject(Class<?> cls, Class<?>[] projections) {
         try {
             return createProjectionClass(cls, projections).getDeclaredConstructor(cls);
         } catch (NoSuchMethodException e) {
@@ -83,7 +91,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }
     }
 
-    private Class<?> createProjectionClass(Class<?> cls, Class<?>[] projections) {
+    protected Class<?> createProjectionClass(Class<?> cls, Class<?>[] projections) {
         var desc = TypeDefinition.Sort.describe(cls).getActualName().replace('.', '/');
         var objectName = "net.binis.projection." + cls.getSimpleName();
         for (var p : projections) {
@@ -119,7 +127,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
                 .getLoaded();
     }
 
-    private DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc, Map<String, List<Class<?>[]>> methods) {
+    protected DynamicType.Builder<?> handleInterface(DynamicType.Builder<?> type, Class<?> cls, Class<?> intf, String desc, Map<String, List<Class<?>[]>> methods) {
         for (var mtd : intf.getDeclaredMethods()) {
             if ((mtd.getModifiers() & Modifier.STATIC) == 0) {
                 type = handleMethod(type, cls, mtd, desc, methods);
@@ -133,7 +141,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return type;
     }
 
-    private DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Map<String, List<Class<?>[]>> methods) {
+    protected DynamicType.Builder<?> handleMethod(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Map<String, List<Class<?>[]>> methods) {
         var types = mtd.getParameterTypes();
         var ret = mtd.getReturnType();
         if (!methodExists(methods, mtd, types)) {
@@ -156,7 +164,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return type;
     }
 
-    private DynamicType.Builder<?> handleUndeclaredMethod(DynamicType.Builder<?> type, Method mtd, Class<?>[] types, Class<?> ret, boolean isVoid) {
+    protected DynamicType.Builder<?> handleUndeclaredMethod(DynamicType.Builder<?> type, Method mtd, Class<?>[] types, Class<?> ret, boolean isVoid) {
         log.info("Handle undeclared method: {}", mtd.toString());
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
@@ -172,7 +180,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
-    private DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
+    protected DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
         if (CodeFactory.isCustomProxyClass(mtd.getReturnType())) {
             var generics = ((ParameterizedType) mtd.getGenericReturnType()).getActualTypeArguments();
             if (needProjection(generics, ((ParameterizedType) m.getGenericReturnType()).getActualTypeArguments())) {
@@ -202,7 +210,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
-    private DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {
+    protected DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {
         assert path.size() > 1;
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
@@ -257,7 +265,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
-    private DynamicType.Builder<?> handleProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
+    protected DynamicType.Builder<?> handleProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
@@ -276,7 +284,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }).annotateMethod(mtd.getDeclaredAnnotations());
     }
 
-    private DynamicType.Builder<?> handleCustomClassProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret, java.lang.reflect.Type[] generics) {
+    protected DynamicType.Builder<?> handleCustomClassProjection(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret, java.lang.reflect.Type[] generics) {
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
             public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
@@ -302,7 +310,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
     }
 
 
-    private boolean needProjection(java.lang.reflect.Type[] generics, java.lang.reflect.Type[] original) {
+    protected boolean needProjection(java.lang.reflect.Type[] generics, java.lang.reflect.Type[] original) {
 
         if (generics.length == original.length) {
             for (var i = 0; i < generics.length; i++) {
@@ -315,7 +323,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return false;
     }
 
-    private String calcDescriptor(Class<?>[] types, Class<?> returnType) {
+    protected String calcDescriptor(Class<?>[] types, Class<?> returnType) {
         var sb = new StringBuilder("(");
 
         for (var t : types) {
@@ -338,7 +346,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return sb.toString();
     }
 
-    private char getPrimitiveDescriptor(Class<?> type) {
+    protected char getPrimitiveDescriptor(Class<?> type) {
 
         if (boolean.class.equals(type))
             return 'Z';
@@ -362,7 +370,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         throw new ProjectionCreationException("Unknown primitive type: " + type.getCanonicalName());
     }
 
-    private int getLoadOpcode(Class<?> type) {
+    protected int getLoadOpcode(Class<?> type) {
         if (type.isPrimitive()) {
             if (long.class.equals(type)) {
                 return Opcodes.LLOAD;
@@ -378,7 +386,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return Opcodes.ALOAD;
     }
 
-    private Pair<Integer, Integer> getReturnOpcode(Class<?> type) {
+    protected Pair<Integer, Integer> getReturnOpcode(Class<?> type) {
         if (void.class.equals(type)) {
             return Pair.of(Opcodes.RETURN, 0);
         }
@@ -397,14 +405,14 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return Pair.of(Opcodes.ARETURN, 0);
     }
 
-    private int getLoadOffset(Class<?> type) {
+    protected int getLoadOffset(Class<?> type) {
         if (type.isPrimitive() && (long.class.equals(type) || double.class.equals(type))) {
             return 2;
         }
         return 1;
     }
 
-    private int loadParams(MethodVisitor methodVisitor, Class<?>[] types) {
+    protected int loadParams(MethodVisitor methodVisitor, Class<?>[] types) {
         var offset = 1;
         for (var type : types) {
             methodVisitor.visitVarInsn(getLoadOpcode(type), offset);
@@ -414,7 +422,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return offset;
     }
 
-    private int loadOffset(Class<?>[] types) {
+    protected int loadOffset(Class<?>[] types) {
         var offset = 0;
         for (Class<?> type : types) {
             offset += getLoadOffset(type);
@@ -424,7 +432,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
     }
 
 
-    private boolean methodExists(Map<String, List<Class<?>[]>> methods, Method mtd, Class<?>[] types) {
+    protected boolean methodExists(Map<String, List<Class<?>[]>> methods, Method mtd, Class<?>[] types) {
         var list = methods.computeIfAbsent(mtd.getName(), k -> new ArrayList<>());
 
         for (var t : list) {
@@ -437,7 +445,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return false;
     }
 
-    private boolean paramsMatch(Class<?>[] types, Class<?>[] t) {
+    protected boolean paramsMatch(Class<?>[] types, Class<?>[] t) {
         if (t.length == types.length) {
             var match = true;
             for (var i = 0; i < t.length; i++) {
@@ -451,7 +459,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return false;
     }
 
-    private DynamicType.Builder<?> checkPath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
+    protected DynamicType.Builder<?> checkPath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
         var path = new ArrayDeque<Method>();
         findStartMethod(cls, mtd.getName(), types, path);
         if (!path.isEmpty()) {
@@ -461,7 +469,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         return null;
     }
 
-    private Method findMethod(Class<?> cls, String name, Class<?>[] types) throws NoSuchMethodException {
+    protected Method findMethod(Class<?> cls, String name, Class<?>[] types) throws NoSuchMethodException {
         try {
             return cls.getDeclaredMethod(name, types);
         } catch (NoSuchMethodException ex) {
@@ -473,7 +481,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }
     }
 
-    private void findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
+    protected void findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
         for (var m : cls.getDeclaredMethods()) {
             if (name.startsWith(m.getName())) {
                 var left = name.substring(m.getName().length());
@@ -498,11 +506,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }
     }
 
-    private String calcGetterName(String value) {
+    protected String calcGetterName(String value) {
         return "get" + Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
-    private static void defaultReturn(MethodVisitor methodVisitor, Class<?> ret) {
+    protected static void defaultReturn(MethodVisitor methodVisitor, Class<?> ret) {
         if (ret.isPrimitive()) {
             if (ret.equals(long.class)) {
                 methodVisitor.visitInsn(Opcodes.LCONST_0);
@@ -523,7 +531,26 @@ public class CodeGenProjectionProvider implements ProjectionProvider {
         }
     }
 
-    private static class EnableFramesComputing implements AsmVisitorWrapper {
+    @SuppressWarnings("unchecked")
+    @Override
+    public Object proxy(Class cls, InvocationHandler handler) {
+        if (cls.isInterface()) {
+            return Proxy.newProxyInstance(cls.getClassLoader(), new Class[]{cls}, handler);
+        } else {
+            var inst = CodeFactory.create(proxies.computeIfAbsent(cls, k ->
+                    new ByteBuddy()
+                            .subclass(k)
+                            .defineField("handler", InvocationHandler.class, Visibility.PUBLIC)
+                            .method(ElementMatchers.any())
+                            .intercept(InvocationHandlerAdapter.toField("handler"))
+                            .make()
+                            .load(k.getClassLoader())
+                            .getLoaded()));
+            return Reflection.setFieldValue(inst, "handler", handler);
+        }
+    }
+
+    protected static class EnableFramesComputing implements AsmVisitorWrapper {
         @Override
         public final int mergeWriter(int flags) {
             return flags | ClassWriter.COMPUTE_FRAMES;
