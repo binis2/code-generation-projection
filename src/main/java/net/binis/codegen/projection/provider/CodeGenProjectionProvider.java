@@ -222,7 +222,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var size = path.size();
                 var m = path.pop();
-                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                if (m.getDeclaringClass().isInterface()) {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, desc, m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), true);
+                } else {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                }
                 Method pm;
                 for (var i = 1; i < size - 1; i++) {
                     pm = m;
@@ -239,7 +243,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
 //                    //Test
 
                     methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
-                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                    if (m.getDeclaringClass().isInterface()) {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), true);
+                    } else {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                    }
                 }
                 pm = m;
                 m = path.pop();
@@ -249,7 +257,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 methodVisitor.visitJumpInsn(Opcodes.IFNULL, label);
                 methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
                 loadParams(methodVisitor, types);
-                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                if (m.getDeclaringClass().isInterface()) {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), true);
+                } else {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
+                }
                 if (ret.isInterface() && !ret.equals(m.getReturnType())) {
                     methodVisitor.visitLdcInsn(Type.getType(ret));
                     methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
@@ -481,20 +493,24 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         }
     }
 
-    protected void findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
+    protected boolean findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
+        var result = false;
         for (var m : cls.getDeclaredMethods()) {
             if (name.startsWith(m.getName())) {
                 var left = name.substring(m.getName().length());
-                if (left.length() == 0) {
+                if (left.isEmpty()) {
                     if (paramsMatch(m.getParameterTypes(), types)) {
                         path.push(m);
-                        return;
+                        return true;
                     }
                 } else {
                     if (m.getParameterCount() == 0 && !m.getReturnType().isPrimitive()) {
-                        findStartMethod(m.getReturnType(), calcGetterName(left), types, path);
+                        result = findStartMethod(m.getReturnType(), calcGetterName(left), types, path);
                         if (!path.isEmpty()) {
                             path.push(m);
+                        }
+                        if (result) {
+                            return result;
                         }
                     }
                 }
@@ -502,8 +518,17 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         }
 
         if (nonNull(cls.getSuperclass())) {
-            findStartMethod(cls.getSuperclass(), name, types, path);
+            result = findStartMethod(cls.getSuperclass(), name, types, path);
         }
+        if (!result) {
+            for (var i : cls.getInterfaces()) {
+                result = findStartMethod(i, name, types, path);
+                if (result) {
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     protected String calcGetterName(String value) {
