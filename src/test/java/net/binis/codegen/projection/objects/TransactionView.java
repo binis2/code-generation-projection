@@ -20,11 +20,14 @@ package net.binis.codegen.projection.objects;
  * #L%
  */
 
+import java.util.List;
 import java.util.UUID;
 
 public interface TransactionView extends Identifiable {
 
     MerchantView getMerchant();
+
+    List<MerchantView> getList();
 
     UUID getMerchantId();
 

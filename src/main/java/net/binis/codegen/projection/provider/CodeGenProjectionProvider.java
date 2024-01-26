@@ -199,7 +199,17 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
                 methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var offset = loadParams(methodVisitor, types);
-                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, ret), false);
+                if (ret.equals(m.getReturnType())) {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, ret), false);
+                } else {
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, m.getReturnType()), false);
+                    methodVisitor.visitVarInsn(Opcodes.ASTORE, 1);
+                    methodVisitor.visitVarInsn(Opcodes.ALOAD, 1);
+                    var restDesc = Type.getType(ret);
+                    methodVisitor.visitLdcInsn(restDesc);
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/map/Mapper", "convert", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, restDesc.getInternalName());
+                }
                 var locals = offset;
                 var retOp = getReturnOpcode(ret);
                 methodVisitor.visitInsn(retOp.getKey());
@@ -263,9 +273,10 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                     methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
                 }
                 if (ret.isInterface() && !ret.equals(m.getReturnType())) {
-                    methodVisitor.visitLdcInsn(Type.getType(ret));
+                    var retDesc = Type.getType(ret);
+                    methodVisitor.visitLdcInsn(retDesc);
                     methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
-                    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, TypeDefinition.Sort.describe(ret).getActualName().replace('.', '/'));
+                    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, retDesc.getInternalName());
                 }
                 var retOp = getReturnOpcode(ret);
                 methodVisitor.visitInsn(retOp.getKey());

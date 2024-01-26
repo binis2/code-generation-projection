@@ -26,9 +26,10 @@ import net.binis.codegen.projection.objects.Identifiable;
 import net.binis.codegen.projection.objects.TransactionView;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ComplexProjectionsTest {
 
@@ -36,13 +37,18 @@ public class ComplexProjectionsTest {
     void test() {
         var obj = new Obj();
         var merch = new Sub();
+        merch.setNumber(123L);
         obj.setMerchant(merch);
+        obj.setId("123");
         merch.setId(UUID.randomUUID());
 
         var view = Projection.single(obj, TransactionView.class);
 
         assertNotNull(view.getMerchant());
         assertNotNull(view.getMerchantId());
+        assertEquals(123.0, view.getMerchant().getNumber());
+
+        assertThrows(IllegalArgumentException.class, view::getId);
     }
 
 
@@ -57,6 +63,8 @@ public class ComplexProjectionsTest {
     @Setter
     public static class Sub extends Base implements Merchant {
         String name;
+
+        Long number;
     }
 
     @Getter
@@ -64,12 +72,19 @@ public class ComplexProjectionsTest {
     public static class Obj {
         Merchant merchant;
 
+        List<Merchant> list;
+
+        String id;
+
         public UUID getMerchantId2() {
             return getMerchant().getId();
         }
     }
 
     public interface Merchant extends Identifiable {
+
+        Long getNumber();
+
     }
 
 }
