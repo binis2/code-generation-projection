@@ -199,7 +199,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
                 methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var offset = loadParams(methodVisitor, types);
-                if (ret.equals(m.getReturnType())) {
+                if (ret.isAssignableFrom(m.getReturnType())) {
                     methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, ret), false);
                 } else {
                     methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, mtd.getName(), calcDescriptor(types, m.getReturnType()), false);
