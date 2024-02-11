@@ -27,6 +27,7 @@ import net.binis.codegen.factory.ProjectionProvider;
 import net.binis.codegen.factory.ProxyProvider;
 import net.binis.codegen.objects.Pair;
 import net.binis.codegen.projection.exception.ProjectionCreationException;
+import net.binis.codegen.projection.interfaces.CodeProxyControl;
 import net.binis.codegen.projection.objects.CodeMethodImplementation;
 import net.binis.codegen.projection.objects.CodeProjectionProxyList;
 import net.binis.codegen.projection.objects.CodeProjectionProxySet;
@@ -92,6 +93,8 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     }
 
     protected Class<?> createProjectionClass(Class<?> cls, Class<?>[] projections) {
+        var implement = new ArrayList<>(Arrays.asList(projections));
+        implement.add(CodeProxyControl.class);
         var desc = TypeDefinition.Sort.describe(cls).getActualName().replace('.', '/');
         var objectName = "net.binis.projection." + cls.getSimpleName();
         for (var p : projections) {
@@ -102,7 +105,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 .subclass(CodeProxyBase.class)
                 .visit(new EnableFramesComputing())
                 .name(objectName)
-                .implement(projections)
+                .implement(implement)
                 .defineConstructor(Opcodes.ACC_PUBLIC).withParameter(cls).intercept(new CodeMethodImplementation() {
                     @Override
                     public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Implementation.Context implementationContext, MethodDescription instrumentedMethod) {
@@ -113,6 +116,15 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                         methodVisitor.visitFieldInsn(Opcodes.PUTFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
                         methodVisitor.visitInsn(Opcodes.RETURN);
                         return new ByteCodeAppender.Size(2, 2);
+                    }
+                })
+                .defineMethod("_object$", Object.class, Opcodes.ACC_PUBLIC).intercept(new CodeMethodImplementation() {
+                    @Override
+                    public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
+                        methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
+                        methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
+                        methodVisitor.visitInsn(Opcodes.ARETURN);
+                        return new ByteCodeAppender.Size(1, 1);
                     }
                 });
 

@@ -31,6 +31,7 @@ import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
+import net.binis.codegen.projection.interfaces.CodeProxyControl;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +46,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProjectionsTest {
 
     ObjectMapper mapper = new ObjectMapper();
+
+    @Test
+    void testProxyControl() {
+        var obj = new TestObject();
+        var proxy = CodeFactory.projection(obj, TestProjection.class);
+
+        assertNotNull(proxy);
+        assertTrue(proxy instanceof CodeProxyControl);
+        assertEquals(obj, ((CodeProxyControl)proxy)._object$());
+    }
 
     @Test
     void test() throws JsonProcessingException {
