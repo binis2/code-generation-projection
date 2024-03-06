@@ -598,6 +598,16 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         }
     }
 
+    @Override
+    public Object multiple(InvocationHandler handler, Class... cls) {
+        //TODO: Check for implementations
+        return switch (cls.length) {
+            case 0 -> throw new IllegalArgumentException("No classes provided!");
+            case 1 -> proxy(cls[0], handler);
+            default -> Proxy.newProxyInstance(cls[0].getClassLoader(), cls, handler);
+        };
+    }
+
     protected static class EnableFramesComputing implements AsmVisitorWrapper {
         @Override
         public final int mergeWriter(int flags) {
