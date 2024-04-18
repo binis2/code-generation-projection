@@ -194,9 +194,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
 
     protected DynamicType.Builder<?> handleDeclaredMethod(DynamicType.Builder<?> type, Method mtd, Method m, String desc, Class<?>[] types, Class<?> ret) {
         if (CodeFactory.isCustomProxyClass(mtd.getReturnType())) {
-            var generics = ((ParameterizedType) mtd.getGenericReturnType()).getActualTypeArguments();
-            if (needProjection(generics, ((ParameterizedType) m.getGenericReturnType()).getActualTypeArguments())) {
-                return handleCustomClassProjection(type, mtd, m, desc, types, ret, generics);
+            if (mtd.getGenericReturnType() instanceof ParameterizedType mtdType && m.getGenericReturnType() instanceof ParameterizedType mType) {
+                var generics = mtdType.getActualTypeArguments();
+                if (needProjection(generics, mType.getActualTypeArguments())) {
+                    return handleCustomClassProjection(type, mtd, m, desc, types, ret, generics);
+                }
             }
         }
 
