@@ -529,13 +529,21 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                         return true;
                     }
                 } else {
-                    if (m.getParameterCount() == 0 && !m.getReturnType().isPrimitive()) {
+                    if (m.getParameterCount() == 0 && !m.getReturnType().isPrimitive() && Character.isUpperCase(left.charAt(0))) {
                         result = findStartMethod(m.getReturnType(), calcGetterName(left), types, path);
                         if (!path.isEmpty()) {
                             path.push(m);
                         }
                         if (result) {
                             return result;
+                        } else {
+                            result = findStartMethod(m.getReturnType(), left.substring(0, 1).toLowerCase() + left.substring(1), types, path);
+                            if (!path.isEmpty()) {
+                                path.push(m);
+                            }
+                            if (result) {
+                                return result;
+                            }
                         }
                     }
                 }

@@ -75,10 +75,11 @@ class ProjectionsTest {
         assertEquals("sub", proxy.getSubProjectionParentSubProjection2(2, 2).getSub());
         assertEquals(3, proxy.getList(1, 2).size());
         assertEquals(3, proxy.getSet().size());
+        assertEquals(3, proxy.getListSize());
 
 
         var json = mapper.writeValueAsString(proxy);
-        assertEquals(482, json.length());
+        assertEquals(495, json.length());
 
         var map = mapper.readValue(json, Map.class);
         assertEquals("value1", map.get("value"));
@@ -208,6 +209,8 @@ class ProjectionsTest {
         List<SubProjection> getList();
 
         Set<SubProjection> getSet();
+
+        int getListSize();
     }
 
     public interface SubProjection {
