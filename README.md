@@ -15,7 +15,7 @@ For full project examples please see [https://github.com/binis2/code-generation-
     <dependency>
         <groupId>dev.binis</groupId>
         <artifactId>code-generator-projection</artifactId>
-        <version>1.2.27</version>
+        <version>1.2.28</version>
     </dependency>
 ```
 
