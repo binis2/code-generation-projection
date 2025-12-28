@@ -9,9 +9,9 @@ package net.binis.codegen.projection.provider;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -135,7 +135,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         }
 
         return type.make()
-                .load(cls.getClassLoader())
+                .load(nonNull(cls.getClassLoader()) ? cls.getClassLoader() : this.getClass().getClassLoader())
                 .getLoaded();
     }
 
@@ -159,8 +159,12 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         if (!methodExists(methods, mtd, types)) {
             var isVoid = void.class.equals(ret);
             try {
-                var m = findMethod(cls, mtd.getName(), types);
-                type = handleDeclaredMethod(type, mtd, m, desc, types, ret);
+                if (Map.class.isAssignableFrom(cls)) {
+                    type = handleMapMethod(type, mtd, desc, types, ret);
+                } else {
+                    var m = findMethod(cls, mtd.getName(), types);
+                    type = handleDeclaredMethod(type, mtd, m, desc, types, ret);
+                }
             } catch (NoSuchMethodException e) {
                 var t = checkPath(type, cls, mtd, desc, types, ret, isVoid);
                 if (isNull(t)) {
@@ -233,6 +237,35 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
             }
         }).annotateMethod(mtd.getDeclaredAnnotations());
     }
+
+    protected DynamicType.Builder<?> handleMapMethod(DynamicType.Builder<?> type, Method mtd, String desc, Class<?>[] types, Class<?> ret) {
+        var key = getKeyName(mtd.getName());
+
+        return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
+            @Override
+            public ByteCodeAppender.Size code(MethodVisitor methodVisitor, Context implementationContext, MethodDescription instrumentedMethod) {
+                methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
+                methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
+                var offset = loadParams(methodVisitor, types);
+                methodVisitor.visitLdcInsn(key);
+
+                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, desc, "get", "(Ljava/lang/Object;)Ljava/lang/Object;", false);
+                var restDesc = Type.getType(ret);
+                methodVisitor.visitLdcInsn(restDesc);
+                methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/map/Mapper", "convert", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, restDesc.getInternalName());
+
+                var locals = offset;
+                var retOp = getReturnOpcode(ret);
+                methodVisitor.visitInsn(retOp.getKey());
+                offset += retOp.getValue();
+
+                return new ByteCodeAppender.Size(offset, locals);
+            }
+        }).annotateMethod(mtd.getDeclaredAnnotations());
+    }
+
 
     protected DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {
         assert path.size() > 1;
@@ -632,6 +665,14 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         @Override
         public final ClassVisitor wrap(TypeDescription td, ClassVisitor cv, Implementation.Context ctx, TypePool tp, FieldList<FieldDescription.InDefinedShape> fields, MethodList<?> methods, int wflags, int rflags) {
             return cv;
+        }
+    }
+
+    public static String getKeyName(String name) {
+        if (name.startsWith("is")) {
+            return name.substring(2, 3).toLowerCase() + name.substring(3);
+        } else {
+            return name.substring(3, 4).toLowerCase() + name.substring(4);
         }
     }
 
