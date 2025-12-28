@@ -29,6 +29,8 @@ import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import lombok.Builder;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.projection.interfaces.CodeProxyControl;
@@ -36,6 +38,7 @@ import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
 
 import java.io.StringWriter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -138,6 +141,24 @@ class ProjectionsTest {
         assertNotNull(xml);
         assertEquals(78, xml.length());
     }
+
+    @Test
+    void testMap() {
+        var map = new HashMap<String, Object>();
+        map.put("value", 5);
+        var view = CodeFactory.projection(map, MapTestView.class);
+        assertEquals("5", view.getValue());
+    }
+
+    @Test
+    void testMapPath() {
+        var map = new HashMap<String, Object>();
+        map.put("value", 5);
+        var obj = MapTestObject.builder().map(map).build();
+        var view = CodeFactory.projection(obj, MapTestView.class);
+        assertEquals("5", view.getMapValue());
+    }
+
 
     protected <T> String obj2XmlString(T data) throws JAXBException {
         var context = JAXBContext.newInstance(data.getClass());
@@ -454,5 +475,16 @@ class ProjectionsTest {
 
     }
 
+    public interface MapTestView {
+        String getValue();
+
+        String getMapValue();
+    }
+
+    @Builder
+    @Data
+    public static class MapTestObject {
+        private Map map;
+    }
 
 }

@@ -57,6 +57,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import static net.binis.codegen.projection.tools.ProjectionTools.decapitalize;
 
 @Slf4j
 public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvider {
@@ -267,7 +268,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     }
 
 
-    protected DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Method> path) {
+    protected DynamicType.Builder<?> handlePath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid, Deque<Object> path) {
         assert path.size() > 1;
         return type.defineMethod(mtd.getName(), ret, Opcodes.ACC_PUBLIC).withParameters(types).intercept(new CodeMethodImplementation() {
             @Override
@@ -278,7 +279,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 methodVisitor.visitFieldInsn(Opcodes.GETFIELD, PROXY_BASE, FIELD_NAME, OBJECT_DESC);
                 methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, desc);
                 var size = path.size();
-                var m = path.pop();
+                var m = (Method) path.pop();
                 if (m.getDeclaringClass().isInterface()) {
                     methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, desc, m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), true);
                 } else {
@@ -287,7 +288,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 Method pm;
                 for (var i = 1; i < size - 1; i++) {
                     pm = m;
-                    m = path.pop();
+                    m = (Method) path.pop();
                     var o = loadOffset + i;
                     methodVisitor.visitVarInsn(Opcodes.ASTORE, o);
                     methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
@@ -307,22 +308,39 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                     }
                 }
                 pm = m;
-                m = path.pop();
+                var q = path.pop();
                 var o = loadOffset + size - 1;
                 methodVisitor.visitVarInsn(Opcodes.ASTORE, o);
                 methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
                 methodVisitor.visitJumpInsn(Opcodes.IFNULL, label);
                 methodVisitor.visitVarInsn(Opcodes.ALOAD, o);
                 loadParams(methodVisitor, types);
-                if (m.getDeclaringClass().isInterface()) {
-                    methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), true);
+                var retDesc = Type.getType(ret);
+                if (q instanceof Method mm) {
+                    if (mm.getDeclaringClass().isInterface()) {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), mm.getName(), calcDescriptor(mm.getParameterTypes(), mm.getReturnType()), true);
+                    } else {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), mm.getName(), calcDescriptor(mm.getParameterTypes(), mm.getReturnType()), false);
+                    }
+                    if (ret.isInterface() && !ret.equals(mm.getReturnType())) {
+                        methodVisitor.visitLdcInsn(retDesc);
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                        methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, retDesc.getInternalName());
+                    } else if (!ret.equals(mm.getReturnType())) {
+                        methodVisitor.visitLdcInsn(retDesc);
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/map/Mapper", "convert", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                        methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, retDesc.getInternalName());
+                    }
                 } else {
-                    methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TypeDefinition.Sort.describe(pm.getReturnType()).getActualName().replace('.', '/'), m.getName(), calcDescriptor(m.getParameterTypes(), m.getReturnType()), false);
-                }
-                if (ret.isInterface() && !ret.equals(m.getReturnType())) {
-                    var retDesc = Type.getType(ret);
+                    methodVisitor.visitLdcInsn(q);
+                    methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;", true);
                     methodVisitor.visitLdcInsn(retDesc);
-                    methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+
+                    if (ret.isInterface()) {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/factory/CodeFactory", "projection", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                    } else {
+                        methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "net/binis/codegen/map/Mapper", "convert", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;", false);
+                    }
                     methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, retDesc.getInternalName());
                 }
                 var retOp = getReturnOpcode(ret);
@@ -530,7 +548,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     }
 
     protected DynamicType.Builder<?> checkPath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
-        var path = new ArrayDeque<Method>();
+        var path = new ArrayDeque<Object>();
         findStartMethod(cls, mtd.getName(), types, path);
         if (!path.isEmpty()) {
             return handlePath(type, cls, mtd, desc, types, ret, isVoid, path);
@@ -551,13 +569,19 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
         }
     }
 
-    protected boolean findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Method> path) {
+    protected boolean findStartMethod(Class<?> cls, String name, Class<?>[] types, Deque<Object> path) {
         var result = false;
         for (var m : cls.getDeclaredMethods()) {
             if (name.startsWith(m.getName())) {
                 var left = name.substring(m.getName().length());
                 if (left.isEmpty()) {
                     if (paramsMatch(m.getParameterTypes(), types)) {
+                        path.push(m);
+                        return true;
+                    }
+                } else if (Map.class.isAssignableFrom(m.getReturnType())) {
+                    if (paramsMatch(m.getParameterTypes(), types)) {
+                        path.push(decapitalize(left));
                         path.push(m);
                         return true;
                     }
