@@ -71,6 +71,7 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     static {
         CodeFactory.registerCustomProxyClass(List.class, (cls, projections) -> obj -> new CodeProjectionProxyList((List) obj, projections));
         CodeFactory.registerCustomProxyClass(Set.class, (cls, projections) -> obj -> new CodeProjectionProxySet((Set) obj, projections));
+        CodeFactory.registerCustomProxyClass(Map.class, (cls, projections) -> obj -> MapBackedProjectionProvider.create((Map) obj, (Class[]) projections));
     }
 
     @Override

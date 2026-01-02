@@ -154,6 +154,7 @@
                     <configuration>
                         <compilerArgs>
                             <arg>-Xlint:unchecked</arg>
+                            <arg>-proc:full</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>

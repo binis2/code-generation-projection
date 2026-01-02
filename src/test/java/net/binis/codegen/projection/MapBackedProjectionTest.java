@@ -22,6 +22,7 @@ package net.binis.codegen.projection;
 
 
 import lombok.extern.slf4j.Slf4j;
+import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.projection.provider.MapBackedProjectionProvider;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +50,7 @@ class MapBackedProjectionTest {
 
     @Test
     void test() {
-        var p = MapBackedProjectionProvider.create(Projection.class, map);
+        var p = MapBackedProjectionProvider.create(map, Projection.class);
 
         assertEquals(5, p.getInt());
         assertEquals("6.0", p.getString());
@@ -57,5 +58,17 @@ class MapBackedProjectionTest {
         assertEquals(8L, p.getLong());
         assertEquals(0.0, p.getFloat());
     }
+
+    @Test
+    void testFactory() {
+        var p = CodeFactory.projection(map, Projection.class);
+
+        assertEquals(5, p.getInt());
+        assertEquals("6.0", p.getString());
+        assertEquals(7.0, p.getDouble());
+        assertEquals(8L, p.getLong());
+        assertEquals(0.0, p.getFloat());
+    }
+
 
 }
