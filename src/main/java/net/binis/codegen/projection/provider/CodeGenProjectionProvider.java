@@ -549,8 +549,13 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     }
 
     protected DynamicType.Builder<?> checkPath(DynamicType.Builder<?> type, Class<?> cls, Method mtd, String desc, Class<?>[] types, Class<?> ret, boolean isVoid) {
-        var path = new ArrayDeque<Object>();
-        findStartMethod(cls, mtd.getName(), types, path);
+        var path = new ArrayDeque<>();
+        var name = mtd.getName();
+        findStartMethod(cls, name, types, path);
+        if (path.isEmpty() && name.startsWith("is")) {
+            name = name.replaceFirst("is", "get");
+            findStartMethod(cls, name, types, path);
+        }
         if (!path.isEmpty()) {
             return handlePath(type, cls, mtd, desc, types, ret, isVoid, path);
         }
@@ -589,6 +594,9 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
                 } else {
                     if (m.getParameterCount() == 0 && !m.getReturnType().isPrimitive() && Character.isUpperCase(left.charAt(0))) {
                         result = findStartMethod(m.getReturnType(), calcGetterName(left), types, path);
+                        if (!result) {
+                            result = findStartMethod(m.getReturnType(), calcBooleanGetterName(left), types, path);
+                        }
                         if (!path.isEmpty()) {
                             path.push(m);
                         }
@@ -625,6 +633,11 @@ public class CodeGenProjectionProvider implements ProjectionProvider, ProxyProvi
     protected String calcGetterName(String value) {
         return "get" + Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
+
+    protected String calcBooleanGetterName(String value) {
+        return "is" + Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
 
     protected static void defaultReturn(MethodVisitor methodVisitor, Class<?> ret) {
         if (ret.isPrimitive()) {

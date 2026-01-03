@@ -159,7 +159,6 @@ class ProjectionsTest {
         assertEquals("5", view.getMapValue());
     }
 
-
     protected <T> String obj2XmlString(T data) throws JAXBException {
         var context = JAXBContext.newInstance(data.getClass());
         var marshaller = context.createMarshaller();
@@ -218,6 +217,8 @@ class ProjectionsTest {
         double getSubProjectionDoubleValue();
 
         long getSubProjectionLongValue();
+
+        boolean isSubProjectionBooleanValue();
 
         boolean getSubProjectionBooleanValue();
 
@@ -327,7 +328,7 @@ class ProjectionsTest {
             return 2L;
         }
 
-        public boolean getBooleanValue() {
+        public boolean isBooleanValue() {
             return true;
         }
 
