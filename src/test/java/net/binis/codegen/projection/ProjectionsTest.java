@@ -23,8 +23,6 @@ package net.binis.codegen.projection;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonRootName;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.annotation.XmlElement;
@@ -36,6 +34,7 @@ import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.projection.interfaces.CodeProxyControl;
 import net.binis.codegen.projection.objects.CodeProxyBase;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.StringWriter;
 import java.util.HashMap;
@@ -61,7 +60,7 @@ class ProjectionsTest {
     }
 
     @Test
-    void test() throws JsonProcessingException {
+    void test() {
         var obj = new TestObject();
         var proxy = CodeFactory.projection(obj, TestProjection.class);
 

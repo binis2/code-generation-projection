@@ -21,13 +21,12 @@ package net.binis.codegen.projection;
  */
 
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.binis.codegen.factory.CodeFactory;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.lang.reflect.InvocationHandler;
 import java.util.List;
@@ -78,7 +77,7 @@ class ProxiesTest {
     }
 
     @Test
-    void testProxiesProjectionsAndJackson() throws JsonProcessingException {
+    void testProxiesProjectionsAndJackson() {
         var mapper = new ObjectMapper();
         var proxy = CodeFactory.proxy(TestIntf.class, handler);
         var projection = CodeFactory.projection(proxy, TestIntf.class);
