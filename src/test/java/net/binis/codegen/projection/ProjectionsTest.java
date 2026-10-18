@@ -55,7 +55,7 @@ class ProjectionsTest {
         var proxy = CodeFactory.projection(obj, TestProjection.class);
 
         assertNotNull(proxy);
-        assertTrue(proxy instanceof CodeProxyControl);
+        assertInstanceOf(CodeProxyControl.class, proxy);
         assertEquals(obj, ((CodeProxyControl)proxy)._object$());
     }
 
